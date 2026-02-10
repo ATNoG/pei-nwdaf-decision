@@ -1,8 +1,7 @@
-fastapi==0.115.0
+fastapi==0.128.6
 pydantic==2.12.5
 uvicorn==0.34.0
 sqlmodel==0.0.32
-psycopg[binary]==3.3.2
 pydantic-settings==2.7.1
 confluent_kafka==2.13.0
 bandit==1.8.0
