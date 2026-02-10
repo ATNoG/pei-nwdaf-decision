@@ -60,8 +60,8 @@ def client(setup_test_db):
     runtime = Mock(spec=DecisionRuntime)
     runtime.decisions = decisions
     runtime.blacklist = blacklist
-    runtime.decision_names = lambda: {d.name for d in decisions}
-    runtime.blacklist_names = lambda: {b.name for b in blacklist}
+    runtime.decision_names = lambda: {d.name for d in runtime.decisions}
+    runtime.blacklist_names = lambda: {b.name for b in runtime.blacklist}
     runtime.persist_decision = lambda entry: None
     runtime.persist_blacklist = lambda entry: None
     runtime.delete_decision = lambda name: None
