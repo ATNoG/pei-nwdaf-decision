@@ -1,0 +1,6 @@
+Analyze this network data and decide what action to take:
+
+{data}
+
+Possible decisions:
+{decisions}
