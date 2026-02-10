@@ -35,8 +35,12 @@ class LLMClient:
         """Send the prompt to the model and return the answer"""
         payload = self._prepare_request(request)
 
+        headers = {}
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
+
         async with httpx.AsyncClient() as client:
-            response = await client.post(self._url, json=payload)
+            response = await client.post(self._url, json=payload, headers=headers)
             response.raise_for_status()
 
         self._call_count += 1
