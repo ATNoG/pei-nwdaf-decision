@@ -7,17 +7,30 @@ from ..schemas import DecisionRequest
 
 PROMPT_PATH: str = "llm/prompt.txt"
 SYSTEM_PATH: str = "llm/system.txt"
+URL:str = "LLM_URL"
+API_KEY:str = "LLM_API_KEY"
+MODEL:str = "LLM_MODEL"
 
 logger = logging.getLogger("LLM_client")
 
 
+def require(x:str, y)-> None:
+    """Raise exception if y is None"""
+    if y is None:
+        raise ValueError("x can't be None")
+
 class LLMClient:
     def __init__(self) -> None:
         # TODO load config from src/core/config
+        
+        self._url: str = os.environ.get(URL)
+        require(URL, self._url)
 
-        self._url: str | None = os.environ.get("LLM_URL")
-        self._api_key: str | None = os.environ.get("LLM_API_KEY")
-        self._model: str | None = os.environ.get("LLM_MODEL")
+        self._api_key: str = os.environ.get(API_KEY)
+        require(API_KEY, self._api_key)
+        
+        self._model: str = os.environ.get(MODEL)
+        require(MODEL, self._model)
 
         with open(PROMPT_PATH) as f:
             self._prompt_template: str = f.read()
