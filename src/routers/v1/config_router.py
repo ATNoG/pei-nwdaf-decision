@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request, HTTPException
 from src.core.runtime import DecisionRuntime
 from src.models import DecisionEntry, BlacklistEntry
 
-router = APIRouter(prefix="/api/v1", tags=["Decision", "Configuration"])
+router = APIRouter(tags=["Decision", "Configuration"])
 
 def get_runtime(request: Request) -> DecisionRuntime:
     return request.app.state.decision_runtime
