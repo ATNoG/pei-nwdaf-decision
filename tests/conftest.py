@@ -8,10 +8,15 @@ from src.routers.v1 import router as v1_router
 from sqlmodel import SQLModel, create_engine, Session, select
 import pytest
 from unittest.mock import Mock, patch
+from sqlalchemy.pool import StaticPool
 
 
 # Use in-memory SQLite for tests
-test_engine = create_engine("sqlite:///:memory:")
+test_engine = create_engine(
+    "sqlite:///:memory:",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
 
 
 @pytest.fixture(autouse=True)
