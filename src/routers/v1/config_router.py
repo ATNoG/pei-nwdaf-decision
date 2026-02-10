@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Request, HTTPException
 from src.core.runtime import DecisionRuntime
-from src.core.models import DecisionEntry, BlacklistEntry
+from src.models import DecisionEntry, BlacklistEntry
 
 router = APIRouter(prefix="/api/v1", tags=["Decision", "Configuration"])
 

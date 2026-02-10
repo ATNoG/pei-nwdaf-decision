@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from src.core.config import settings
-from src.core.models import Decision, Blacklist, DecisionEntry, BlacklistEntry
+from src.models import Decision, Blacklist, DecisionEntry, BlacklistEntry
 from src.core.database import init_db, get_session
 import logging
 
