@@ -1,6 +1,5 @@
 from sqlmodel import SQLModel, create_engine, Session
 from src.core.config import settings
-from src.models import Decision, Blacklist
 
 engine = create_engine(settings.DATABASE_URL, echo=settings.DEBUG)
 

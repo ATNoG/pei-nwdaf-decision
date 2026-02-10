@@ -1,5 +1,4 @@
 from fastapi.testclient import TestClient
-from src.core.config import settings
 from src.models.db import Decision, Blacklist
 from src.core.database import get_session
 from src.core.runtime import DecisionRuntime
@@ -7,7 +6,7 @@ from src.models import DecisionEntry, BlacklistEntry
 from src.routers.v1 import router as v1_router
 from sqlmodel import SQLModel, create_engine, Session, select
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from sqlalchemy.pool import StaticPool
 
 

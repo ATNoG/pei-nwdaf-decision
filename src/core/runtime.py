@@ -2,10 +2,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from src.core.config import settings
 from src.models import Decision, Blacklist, DecisionEntry, BlacklistEntry
-from src.core.database import init_db, get_session
+from src.core.database import init_db, engine
+from sqlmodel import Session, select
 import logging
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 
 class DecisionRuntime:
@@ -25,9 +26,9 @@ class DecisionRuntime:
 
     def reload_from_db(self):
         """Reload decisions and blacklist from database."""
-        with next(get_session()) as session:
-            decisions = session.query(Decision).all()
-            blacklist = session.query(Blacklist).all()
+        with Session(engine) as session:
+            decisions = session.exec(select(Decision)).all()
+            blacklist = session.exec(select(Blacklist)).all()
 
             self.decisions = [DecisionEntry(name=d.name, description=d.description) for d in decisions]
             self.blacklist = [BlacklistEntry(name=b.name, reason=b.reason) for b in blacklist]
@@ -36,7 +37,7 @@ class DecisionRuntime:
 
     def persist_decision(self, entry: DecisionEntry) -> Decision:
         """Persist a decision to database."""
-        with next(get_session()) as session:
+        with Session(engine) as session:
             db_decision = Decision(name=entry.name, description=entry.description)
             session.add(db_decision)
             session.commit()
@@ -45,7 +46,7 @@ class DecisionRuntime:
 
     def persist_blacklist(self, entry: BlacklistEntry) -> Blacklist:
         """Persist a blacklist entry to database."""
-        with next(get_session()) as session:
+        with Session(engine) as session:
             db_entry = Blacklist(name=entry.name, reason=entry.reason)
             session.add(db_entry)
             session.commit()
@@ -54,8 +55,8 @@ class DecisionRuntime:
 
     def delete_decision(self, name: str) -> bool:
         """Delete a decision from database."""
-        with next(get_session()) as session:
-            decision = session.query(Decision).filter(Decision.name == name).first()
+        with Session(engine) as session:
+            decision = session.exec(select(Decision).where(Decision.name == name)).first()
             if decision:
                 session.delete(decision)
                 session.commit()
@@ -64,8 +65,8 @@ class DecisionRuntime:
 
     def delete_blacklist(self, name: str) -> bool:
         """Delete a blacklist entry from database."""
-        with next(get_session()) as session:
-            entry = session.query(Blacklist).filter(Blacklist.name == name).first()
+        with Session(engine) as session:
+            entry = session.exec(select(Blacklist).where(Blacklist.name == name)).first()
             if entry:
                 session.delete(entry)
                 session.commit()
@@ -79,8 +80,8 @@ async def lifespan(app: FastAPI):
 
     init_db()
 
-    with next(get_session()) as session:
-        existing_decisions = session.query(Decision).all()
+    with Session(engine) as session:
+        existing_decisions = session.exec(select(Decision)).all()
 
         if not existing_decisions:
             default_decisions = [Decision(name=d) for d in settings.DEFAULT_DECISIONS]
@@ -89,8 +90,8 @@ async def lifespan(app: FastAPI):
             session.commit()
             logger.info(f"Created {len(default_decisions)} default decisions")
 
-        decisions = [DecisionEntry(name=d.name, description=d.description) for d in session.query(Decision).all()]
-        blacklist = [BlacklistEntry(name=b.name, reason=b.reason) for b in session.query(Blacklist).all()]
+        decisions = [DecisionEntry(name=d.name, description=d.description) for d in session.exec(select(Decision)).all()]
+        blacklist = [BlacklistEntry(name=b.name, reason=b.reason) for b in session.exec(select(Blacklist)).all()]
 
     runtime = DecisionRuntime(decisions=decisions, blacklist=blacklist)
 
