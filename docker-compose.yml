@@ -1,8 +1,47 @@
 services:
-  #TODO
-  the_service:
+  decision:
     build: .
+    container_name: decision-service
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=decision
+      - DB_PASSWORD=decision
+      - DB_NAME=decision_db
+      - DEBUG=false
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - nwdaf-network
+      - decision-internal
+
+  db:
+    image: postgres:16-alpine
+    container_name: decision-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=decision
+      - POSTGRES_PASSWORD=decision
+      - POSTGRES_DB=decision_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U decision -d decision_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - decision-internal
+
+volumes:
+  postgres_data:
 
 networks:
+  decision-internal:
+    driver: bridge
   nwdaf-network:
     external: true
