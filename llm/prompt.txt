@@ -1,5 +1,4 @@
-Analyze this network data and decide what action to take:
-
+ML inferences:
 {data}
 
 Possible decisions:
