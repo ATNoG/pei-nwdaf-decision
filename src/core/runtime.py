@@ -1,20 +1,27 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from src.core.config import settings
-from src.models import Decision, Blacklist, DecisionEntry, BlacklistEntry
+from src.models import Decision, Blacklist, RiskLevel, DecisionEntry, BlacklistEntry, RiskLevelEntry
 from src.core.database import init_db, engine
 from sqlmodel import Session, select
 import logging
+from typing import cast
 
 logger = logging.getLogger(__name__)
 
 
 class DecisionRuntime:
-    __slots__ = ("decisions", "blacklist")
+    __slots__ = ("decisions", "blacklist", "risk_levels")
 
-    def __init__(self, decisions: list[DecisionEntry], blacklist: list[BlacklistEntry] | None = None):
+    def __init__(
+        self,
+        decisions: list[DecisionEntry],
+        blacklist: list[BlacklistEntry] | None = None,
+        risk_levels: list[RiskLevelEntry] | None = None
+    ):
         self.decisions: list[DecisionEntry] = decisions
         self.blacklist: list[BlacklistEntry] = blacklist or []
+        self.risk_levels: list[RiskLevelEntry] = risk_levels or []
 
     def decision_names(self) -> set[str]:
         """Return set of decision names for lookup."""
@@ -24,21 +31,49 @@ class DecisionRuntime:
         """Return set of blacklist entry names for lookup."""
         return {b.name for b in self.blacklist}
 
+    def risk_level_names(self) -> set[str]:
+        """Return set of risk level names for lookup."""
+        return {r.name for r in self.risk_levels}
+
     def reload_from_db(self):
-        """Reload decisions and blacklist from database."""
+        """Reload decisions, blacklist, and risk levels from database."""
         with Session(engine) as session:
             decisions = session.exec(select(Decision)).all()
             blacklist = session.exec(select(Blacklist)).all()
+            risk_levels = session.exec(select(RiskLevel)).all()
 
-            self.decisions = [DecisionEntry(name=d.name, description=d.description) for d in decisions]
+            self.decisions = [
+                DecisionEntry(
+                    name=d.name,
+                    description=d.description,
+                    risk_level_id=d.risk_level_id,
+                    justification=d.justification
+                ) for d in decisions
+            ]
             self.blacklist = [BlacklistEntry(name=b.name, reason=b.reason) for b in blacklist]
+            self.risk_levels = [
+                RiskLevelEntry(
+                    name=r.name,
+                    degree=r.degree,
+                    description=r.description
+                ) for r in risk_levels
+            ]
 
-        logger.info(f"Reloaded {len(self.decisions)} decisions and {len(self.blacklist)} blacklist entries from database")
+        logger.info(
+            f"Reloaded {len(self.decisions)} decisions, "
+            f"{len(self.blacklist)} blacklist entries, "
+            f"and {len(self.risk_levels)} risk levels from database"
+        )
 
     def persist_decision(self, entry: DecisionEntry) -> Decision:
         """Persist a decision to database."""
         with Session(engine) as session:
-            db_decision = Decision(name=entry.name, description=entry.description)
+            db_decision = Decision(
+                name=entry.name,
+                description=entry.description,
+                risk_level_id=entry.risk_level_id,
+                justification=entry.justification
+            )
             session.add(db_decision)
             session.commit()
             session.refresh(db_decision)
@@ -52,6 +87,19 @@ class DecisionRuntime:
             session.commit()
             session.refresh(db_entry)
             return db_entry
+
+    def persist_risk_level(self, entry: RiskLevelEntry) -> RiskLevel:
+        """Persist a risk level to database."""
+        with Session(engine) as session:
+            db_risk_level = RiskLevel(
+                name=entry.name,
+                degree=entry.degree,
+                description=entry.description
+            )
+            session.add(db_risk_level)
+            session.commit()
+            session.refresh(db_risk_level)
+            return db_risk_level
 
     def delete_decision(self, name: str) -> bool:
         """Delete a decision from database."""
@@ -73,6 +121,16 @@ class DecisionRuntime:
                 return True
             return False
 
+    def delete_risk_level(self, name: str) -> bool:
+        """Delete a risk level from database."""
+        with Session(engine) as session:
+            risk_level = session.exec(select(RiskLevel).where(RiskLevel.name == name)).first()
+            if risk_level:
+                session.delete(risk_level)
+                session.commit()
+                return True
+            return False
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -81,19 +139,56 @@ async def lifespan(app: FastAPI):
     init_db()
 
     with Session(engine) as session:
-        existing_decisions = session.exec(select(Decision)).all()
+        # Initialize default risk levels if none exist
+        existing_risk_levels = session.exec(select(RiskLevel)).all()
+        if not existing_risk_levels:
+            default_risk_levels = [
+                RiskLevel(name="Low Risk", degree=30, description="Minimal oversight required"),
+                RiskLevel(name="Medium Risk", degree=60, description="Standard review process"),
+                RiskLevel(name="High Risk", degree=90, description="Requires senior approval"),
+                RiskLevel(name="Critical Risk", degree=100, description="Executive approval only"),
+            ]
+            for rl in default_risk_levels:
+                session.add(rl)
+            session.commit()
+            logger.info(f"Created {len(default_risk_levels)} default risk levels")
 
+        # Initialize default decisions if none exist
+        existing_decisions = session.exec(select(Decision)).all()
         if not existing_decisions:
-            default_decisions = [Decision(name=d) for d in settings.DEFAULT_DECISIONS]
+            # Get low risk level id
+            low_risk = session.exec(select(RiskLevel).where(RiskLevel.name == "Low Risk")).first()
+            default_decisions = [
+                Decision(name=d, risk_level_id=low_risk.id if low_risk else None)
+                for d in settings.DEFAULT_DECISIONS
+            ]
             for d in default_decisions:
                 session.add(d)
             session.commit()
             logger.info(f"Created {len(default_decisions)} default decisions")
 
-        decisions = [DecisionEntry(name=d.name, description=d.description) for d in session.exec(select(Decision)).all()]
-        blacklist = [BlacklistEntry(name=b.name, reason=b.reason) for b in session.exec(select(Blacklist)).all()]
+        # Load all data
+        decisions = [
+            DecisionEntry(
+                name=d.name,
+                description=d.description,
+                risk_level_id=d.risk_level_id,
+                justification=d.justification
+            ) for d in session.exec(select(Decision)).all()
+        ]
+        blacklist = [
+            BlacklistEntry(name=b.name, reason=b.reason)
+            for b in session.exec(select(Blacklist)).all()
+        ]
+        risk_levels = [
+            RiskLevelEntry(
+                name=r.name,
+                degree=r.degree,
+                description=r.description
+            ) for r in session.exec(select(RiskLevel)).all()
+        ]
 
-    runtime = DecisionRuntime(decisions=decisions, blacklist=blacklist)
+    runtime = DecisionRuntime(decisions=decisions, blacklist=blacklist, risk_levels=risk_levels)
 
     app.state.decision_runtime = runtime
 
