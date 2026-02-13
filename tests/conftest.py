@@ -1,5 +1,7 @@
+from datetime import datetime, timezone
+
 from fastapi.testclient import TestClient
-from src.models.db import Decision, Blacklist
+from src.models.db import Decision, Blacklist, DecisionResult
 from src.core.database import get_session
 from src.core.runtime import DecisionRuntime
 from src.models import DecisionEntry, BlacklistEntry
@@ -77,3 +79,26 @@ def client(setup_test_db):
         yield test_client
 
     test_app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def seed_decision_results(client):
+    """Seed the test database with decision results."""
+    with Session(test_engine) as session:
+        result1 = DecisionResult(
+            decision_name="ALLOCATE X",
+            status="applied",
+            confidence=0.85,
+            details={"reason": "high traffic detected"},
+            created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        )
+        result2 = DecisionResult(
+            decision_name="SUBVERT Y",
+            status="pending",
+            confidence=0.72,
+            details=None,
+            created_at=datetime(2025, 1, 2, tzinfo=timezone.utc),
+        )
+        session.add(result1)
+        session.add(result2)
+        session.commit()
