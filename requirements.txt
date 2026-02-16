@@ -1,9 +1,11 @@
-fastapi==0.121.3
-pydantic==2.12.4
+fastapi==0.128.6
+pydantic==2.12.5
 uvicorn==0.34.0
-confluent_kafka==2.12.2
+sqlmodel==0.0.32
+pydantic-settings==2.7.1
+confluent_kafka==2.13.0
 bandit==1.8.0
-safety==2.3.5
 httpx==0.28.1
 pytest
 pytest-asyncio
+safety==3.2.11
