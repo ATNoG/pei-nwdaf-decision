@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     DEFAULT_DECISIONS: list[str] = ["ALLOCATE X", "SUBVERT Y", "ABDUCT Z"]
     BLACKLIST_ENABLED: bool = True
 
+    LLM_URL: str = "localhost"
+    LLM_API_KEY: str = "my-api-key"
+    LLM_MODEL: str = "my-model"
     DB_PATH: str = "/app/data/decision.db"
 
     @property
@@ -18,4 +21,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-

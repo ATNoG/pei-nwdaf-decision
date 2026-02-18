@@ -5,8 +5,7 @@ sqlmodel==0.0.32
 pydantic-settings==2.7.1
 confluent_kafka==2.13.0
 bandit==1.8.0
-safety==3.2.11
-
-# Testing
-pytest==8.3.4
 httpx==0.28.1
+pytest
+pytest-asyncio
+safety==3.2.11
