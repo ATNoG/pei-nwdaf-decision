@@ -1,9 +1,11 @@
 import json
 import logging
-import httpx
 from typing import Any
-from ..schemas import DecisionRequest
+
+import httpx
+
 from ..core.config import settings
+from ..schemas import DecisionRequest
 
 PROMPT_PATH: str = "llm/prompt.txt"
 SYSTEM_PATH: str = "llm/system.txt"
@@ -77,11 +79,11 @@ class LLMClient:
             "format": {
                 "type": "object",
                 "properties": {
-                    "decision": {"type": "string"},
+                    "decisions": {"type": "array", "items": {"type": "string"}},
                     "reasoning": {"type": "string"},
                     "alternatives": {"type": "array", "items": {"type": "string"}},
                 },
-                "required": ["decision", "reasoning", "alternatives"],
+                "required": ["decisions", "reasoning", "alternatives"],
             },
         }
 
