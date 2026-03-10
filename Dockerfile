@@ -25,6 +25,5 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY . .
 
-EXPOSE ${PORT:-8000}
 
-CMD sh -c "uv run uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
+CMD sh -c "uv run uvicorn main:app --host 0.0.0.0 --port ${DPORT:-8000}"
