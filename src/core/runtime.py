@@ -153,19 +153,13 @@ async def lifespan(app: FastAPI):
             session.commit()
             logger.info(f"Created {len(default_risk_levels)} default risk levels")
 
-        # Initialize default decisions if none exist
+        # Seed do_nothing decision if no decisions exist
         existing_decisions = session.exec(select(Decision)).all()
         if not existing_decisions:
-            # Get low risk level id
             low_risk = session.exec(select(RiskLevel).where(RiskLevel.name == "Low Risk")).first()
-            default_decisions = [
-                Decision(name=d, risk_level_id=low_risk.id if low_risk else None)
-                for d in settings.DEFAULT_DECISIONS
-            ]
-            for d in default_decisions:
-                session.add(d)
+            session.add(Decision(name="do_nothing", risk_level_id=low_risk.id if low_risk else None))
             session.commit()
-            logger.info(f"Created {len(default_decisions)} default decisions")
+            logger.info("Seeded 'do_nothing' decision")
 
         # Load all data
         decisions = [
@@ -191,6 +185,11 @@ async def lifespan(app: FastAPI):
     runtime = DecisionRuntime(decisions=decisions, blacklist=blacklist, risk_levels=risk_levels)
 
     app.state.decision_runtime = runtime
+
+    if settings.KAFKA_ENABLED:
+        from src.services.anomaly_pipeline import setup_anomaly_pipeline
+        setup_anomaly_pipeline(runtime)
+        logger.info("Kafka anomaly pipeline started")
 
     logger.info("Runtime initialized successfully.")
 
