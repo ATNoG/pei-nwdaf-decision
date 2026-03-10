@@ -11,7 +11,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Download and extract the repository files
 RUN mkdir utils && cd utils \
 && git init \
 && git remote add origin https://github.com/ATNoG/pei-nwdaf-comms.git \
@@ -20,3 +19,12 @@ RUN mkdir utils && cd utils \
 && mv kafka/src/kmw.py . \
 && rm -rf .git \
 && rmdir -p kafka/src
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+COPY . .
+
+EXPOSE ${PORT:-8000}
+
+CMD sh -c "uv run uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"

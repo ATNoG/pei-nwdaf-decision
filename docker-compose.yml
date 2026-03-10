@@ -1,7 +1,22 @@
 services:
-  #TODO
-  the_service:
+  decision:
     build: .
+    container_name: decision-service
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:${PORT:-8000}"
+    env_file:
+      - .env
+    environment:
+      - DB_PATH=/app/data/decision.db
+      - DEBUG=false
+    volumes:
+      - decision_data:/app/data
+    networks:
+      - nwdaf-network
+
+volumes:
+  decision_data:
 
 networks:
   nwdaf-network:
