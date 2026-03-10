@@ -1,11 +1,20 @@
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from src.core.config import settings
-from src.models import Decision, Blacklist, RiskLevel, DecisionEntry, BlacklistEntry, RiskLevelEntry
-from src.core.database import init_db, engine
-from sqlmodel import Session, select
 import logging
+from contextlib import asynccontextmanager
 from typing import cast
+
+from fastapi import FastAPI
+from sqlmodel import Session, select
+
+from src.core.config import settings
+from src.core.database import engine, init_db
+from src.models import (
+    Blacklist,
+    BlacklistEntry,
+    Decision,
+    DecisionEntry,
+    RiskLevel,
+    RiskLevelEntry,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +26,7 @@ class DecisionRuntime:
         self,
         decisions: list[DecisionEntry],
         blacklist: list[BlacklistEntry] | None = None,
-        risk_levels: list[RiskLevelEntry] | None = None
+        risk_levels: list[RiskLevelEntry] | None = None,
     ):
         self.decisions: list[DecisionEntry] = decisions
         self.blacklist: list[BlacklistEntry] = blacklist or []
@@ -47,16 +56,16 @@ class DecisionRuntime:
                     name=d.name,
                     description=d.description,
                     risk_level_id=d.risk_level_id,
-                    justification=d.justification
-                ) for d in decisions
+                    justification=d.justification,
+                )
+                for d in decisions
             ]
-            self.blacklist = [BlacklistEntry(name=b.name, reason=b.reason) for b in blacklist]
+            self.blacklist = [
+                BlacklistEntry(name=b.name, reason=b.reason) for b in blacklist
+            ]
             self.risk_levels = [
-                RiskLevelEntry(
-                    name=r.name,
-                    degree=r.degree,
-                    description=r.description
-                ) for r in risk_levels
+                RiskLevelEntry(name=r.name, degree=r.degree, description=r.description)
+                for r in risk_levels
             ]
 
         logger.info(
@@ -72,7 +81,7 @@ class DecisionRuntime:
                 name=entry.name,
                 description=entry.description,
                 risk_level_id=entry.risk_level_id,
-                justification=entry.justification
+                justification=entry.justification,
             )
             session.add(db_decision)
             session.commit()
@@ -92,9 +101,7 @@ class DecisionRuntime:
         """Persist a risk level to database."""
         with Session(engine) as session:
             db_risk_level = RiskLevel(
-                name=entry.name,
-                degree=entry.degree,
-                description=entry.description
+                name=entry.name, degree=entry.degree, description=entry.description
             )
             session.add(db_risk_level)
             session.commit()
@@ -104,7 +111,9 @@ class DecisionRuntime:
     def delete_decision(self, name: str) -> bool:
         """Delete a decision from database."""
         with Session(engine) as session:
-            decision = session.exec(select(Decision).where(Decision.name == name)).first()
+            decision = session.exec(
+                select(Decision).where(Decision.name == name)
+            ).first()
             if decision:
                 session.delete(decision)
                 session.commit()
@@ -114,7 +123,9 @@ class DecisionRuntime:
     def delete_blacklist(self, name: str) -> bool:
         """Delete a blacklist entry from database."""
         with Session(engine) as session:
-            entry = session.exec(select(Blacklist).where(Blacklist.name == name)).first()
+            entry = session.exec(
+                select(Blacklist).where(Blacklist.name == name)
+            ).first()
             if entry:
                 session.delete(entry)
                 session.commit()
@@ -124,7 +135,9 @@ class DecisionRuntime:
     def delete_risk_level(self, name: str) -> bool:
         """Delete a risk level from database."""
         with Session(engine) as session:
-            risk_level = session.exec(select(RiskLevel).where(RiskLevel.name == name)).first()
+            risk_level = session.exec(
+                select(RiskLevel).where(RiskLevel.name == name)
+            ).first()
             if risk_level:
                 session.delete(risk_level)
                 session.commit()
@@ -143,10 +156,20 @@ async def lifespan(app: FastAPI):
         existing_risk_levels = session.exec(select(RiskLevel)).all()
         if not existing_risk_levels:
             default_risk_levels = [
-                RiskLevel(name="Low Risk", degree=30, description="Minimal oversight required"),
-                RiskLevel(name="Medium Risk", degree=60, description="Standard review process"),
-                RiskLevel(name="High Risk", degree=90, description="Requires senior approval"),
-                RiskLevel(name="Critical Risk", degree=100, description="Executive approval only"),
+                RiskLevel(
+                    name="Low Risk", degree=30, description="Minimal oversight required"
+                ),
+                RiskLevel(
+                    name="Medium Risk", degree=60, description="Standard review process"
+                ),
+                RiskLevel(
+                    name="High Risk", degree=90, description="Requires senior approval"
+                ),
+                RiskLevel(
+                    name="Critical Risk",
+                    degree=100,
+                    description="Executive approval only",
+                ),
             ]
             for rl in default_risk_levels:
                 session.add(rl)
@@ -156,8 +179,14 @@ async def lifespan(app: FastAPI):
         # Seed do_nothing decision if no decisions exist
         existing_decisions = session.exec(select(Decision)).all()
         if not existing_decisions:
-            low_risk = session.exec(select(RiskLevel).where(RiskLevel.name == "Low Risk")).first()
-            session.add(Decision(name="do_nothing", risk_level_id=low_risk.id if low_risk else None))
+            low_risk = session.exec(
+                select(RiskLevel).where(RiskLevel.name == "Low Risk")
+            ).first()
+            session.add(
+                Decision(
+                    name="do_nothing", risk_level_id=low_risk.id if low_risk else None
+                )
+            )
             session.commit()
             logger.info("Seeded 'do_nothing' decision")
 
@@ -167,27 +196,28 @@ async def lifespan(app: FastAPI):
                 name=d.name,
                 description=d.description,
                 risk_level_id=d.risk_level_id,
-                justification=d.justification
-            ) for d in session.exec(select(Decision)).all()
+                justification=d.justification,
+            )
+            for d in session.exec(select(Decision)).all()
         ]
         blacklist = [
             BlacklistEntry(name=b.name, reason=b.reason)
             for b in session.exec(select(Blacklist)).all()
         ]
         risk_levels = [
-            RiskLevelEntry(
-                name=r.name,
-                degree=r.degree,
-                description=r.description
-            ) for r in session.exec(select(RiskLevel)).all()
+            RiskLevelEntry(name=r.name, degree=r.degree, description=r.description)
+            for r in session.exec(select(RiskLevel)).all()
         ]
 
-    runtime = DecisionRuntime(decisions=decisions, blacklist=blacklist, risk_levels=risk_levels)
+    runtime = DecisionRuntime(
+        decisions=decisions, blacklist=blacklist, risk_levels=risk_levels
+    )
 
     app.state.decision_runtime = runtime
 
     if settings.KAFKA_ENABLED:
-        from src.services.anomaly_pipeline import setup_anomaly_pipeline
+        from src.services.decision_pipeline import setup_anomaly_pipeline
+
         setup_anomaly_pipeline(runtime)
         logger.info("Kafka anomaly pipeline started")
 
