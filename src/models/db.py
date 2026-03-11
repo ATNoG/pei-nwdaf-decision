@@ -47,7 +47,7 @@ class Subscription(SQLModel, table=True):
     cell_ids: list[int] = Field(sa_column=Column(JSON, nullable=False))
     event_types: list[str] = Field(sa_column=Column(JSON, nullable=False))
     expiry_time: datetime = Field(
-        sa_column=Column(DateTime(timezone=True)),
-        default_factory=lambda: datetime.now(timezone.utc) + timedelta(weeks=2),
+        sa_column=Column(DateTime(timezone=False)),
+        default_factory=lambda: datetime.now() + timedelta(weeks=2),
     )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

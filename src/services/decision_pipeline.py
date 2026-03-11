@@ -103,7 +103,7 @@ class DecisionPipeline:
             if self.notification_service:
                 event_types = set()
                 for result in content.get("results", []):
-                    if x := result.get("event_type"):
+                    if x := result.get("type"):
                         event_types.add(x)
 
                 await self.notification_service.notify(

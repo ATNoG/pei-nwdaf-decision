@@ -50,17 +50,23 @@ class NotificationService:
         subscribers = set()
         for event_type in event_types:
             subscribers.update(
-                self.subscription_runtime.get_by_cell_event(cell_id, event_type)
+                entry.callback_url
+                for entry in self.subscription_runtime.get_by_cell_event(
+                    cell_id, event_type
+                )
             )
 
         if not subscribers:
             logger.debug("No subscribers for cell %s, event [%s]", cell_id, event_types)
             return 0
 
+        decisions_info = payload.get("decisions", {})
         notification = {
             "cell_id": cell_id,
-            "event_type": event_types,
-            "data": payload,
+            "event_type": list(event_types),
+            "decisions": decisions_info.get("decisions", []),
+            "reasoning": decisions_info.get("reasoning", ""),
+            "alternatives": decisions_info.get("alternatives", []),
         }
 
         tasks = [self._send_notification(sub, notification) for sub in subscribers]
@@ -80,46 +86,42 @@ class NotificationService:
 
     async def _send_notification(
         self,
-        subscription: SubscriptionEntry,
+        subscription_url: str,
         notification: dict,
     ) -> bool:
         """Send notification to a single subscriber."""
         try:
             client = await self._get_client()
             response = await client.post(
-                subscription.callback_url,
+                subscription_url,
                 json=notification,
             )
             response.raise_for_status()
             logger.debug(
-                "Notification sent to %s (subscription %s)",
-                subscription.callback_url,
-                subscription.id,
+                "Notification sent to %s",
+                subscription_url,
             )
             return True
 
         except httpx.TimeoutException:
             logger.warning(
                 "Timeout sending notification to %s (subscription %s)",
-                subscription.callback_url,
-                subscription.id,
+                subscription_url,
             )
             return False
 
         except httpx.HTTPStatusError as e:
             logger.warning(
-                "HTTP %d from %s (subscription %s)",
+                "HTTP %d ",
                 e.response.status_code,
-                subscription.callback_url,
-                subscription.id,
+                subscription_url,
             )
             return False
 
         except Exception as e:
             logger.error(
-                "Failed to notify %s (subscription %s): %s",
-                subscription.callback_url,
-                subscription.id,
+                "Failed to notify %s (subscription %s)",
+                subscription_url,
                 e,
             )
             return False

@@ -30,7 +30,7 @@ class SubscriptionRuntime:
 
     def load_from_db(self) -> None:
         """Load all subscriptions from database into memory."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now()
 
         with Session(engine) as session:
             subs = session.exec(select(Subscription)).all()
@@ -154,7 +154,7 @@ class SubscriptionRuntime:
 
     def cleanup_expired(self) -> int:
         """Remove expired subscriptions. Returns count of removed."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now()
         expired_ids: list[str] = []
 
         with Session(engine) as session:
