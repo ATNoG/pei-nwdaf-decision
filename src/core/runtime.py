@@ -1,6 +1,5 @@
 import logging
 from contextlib import asynccontextmanager
-from typing import cast
 
 from fastapi import FastAPI
 from sqlmodel import Session, select
