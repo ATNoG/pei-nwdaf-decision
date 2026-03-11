@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from sqlalchemy import Column
@@ -46,5 +46,7 @@ class Subscription(SQLModel, table=True):
     callback_url: str
     cell_ids: list[int] = Field(sa_column=Column(JSON, nullable=False))
     event_types: list[str] = Field(sa_column=Column(JSON, nullable=False))
-    expiry_time: datetime | None = Field(default=None)
+    expiry_time: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc) + timedelta(weeks=2)
+    )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

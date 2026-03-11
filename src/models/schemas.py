@@ -1,7 +1,7 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class DecisionStatus(str, Enum):
@@ -54,7 +54,4 @@ class SubscriptionEntry(BaseModel):
     callback_url: str
     cell_ids: list[int]
     event_types: list[str]
-    expiry_time: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc) + timedelta(weeks=2)
-    )
     created_at: datetime | None = None
