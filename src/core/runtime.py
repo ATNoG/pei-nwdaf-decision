@@ -6,6 +6,7 @@ from sqlmodel import Session, select
 
 from src.core.config import settings
 from src.core.database import engine, init_db
+from src.core.subscriptions import SubscriptionRuntime
 from src.models import (
     Blacklist,
     BlacklistEntry,
@@ -213,6 +214,10 @@ async def lifespan(app: FastAPI):
     )
 
     app.state.decision_runtime = runtime
+
+    subscription_runtime = SubscriptionRuntime()
+    subscription_runtime.load_from_db()
+    app.state.subscription_runtime = subscription_runtime
 
     if settings.KAFKA_ENABLED:
         from src.services.decision_pipeline import setup_anomaly_pipeline
