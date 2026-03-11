@@ -36,7 +36,7 @@ jobs:
 
       - name: Run security scan with bandit
         run: |
-          uv bandit -r src/ main.py -f txt
+          uv run bandit -r src/ main.py -f txt
 
 
   trigger-jenkins:
