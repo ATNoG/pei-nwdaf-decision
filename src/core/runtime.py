@@ -222,7 +222,7 @@ async def lifespan(app: FastAPI):
     if settings.KAFKA_ENABLED:
         from src.services.decision_pipeline import setup_anomaly_pipeline
 
-        setup_anomaly_pipeline(runtime)
+        setup_anomaly_pipeline(runtime, subscription_runtime)
         logger.info("Kafka anomaly pipeline started")
 
     logger.info("Runtime initialized successfully.")

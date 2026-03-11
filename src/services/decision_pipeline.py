@@ -11,9 +11,11 @@ import re
 import time
 
 from src.core.config import settings
-from src.services.llm_client import LLMClient
-from src.schemas.decision import DecisionRequest
 from src.core.runtime import DecisionRuntime
+from src.core.subscriptions import SubscriptionRuntime
+from src.schemas.decision import DecisionRequest
+from src.services.llm_client import LLMClient
+from src.services.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +24,17 @@ class DecisionPipeline:
 
     _TEMPLATE_RE = re.compile(r"<<(\w+)>>")
 
-    def __init__(self, bridge, llm_client: LLMClient, runtime: DecisionRuntime):
+    def __init__(
+        self,
+        bridge,
+        llm_client: LLMClient,
+        runtime: DecisionRuntime,
+        notification_service: NotificationService | None = None,
+    ):
         self.bridge = bridge
         self.llm_client = llm_client
         self.runtime = runtime
+        self.notification_service = notification_service
         self._last_run: dict[int, float] = {}
 
     def on_message(self, data: dict) -> dict:
@@ -60,7 +69,9 @@ class DecisionPipeline:
             # Build decisions, expanding templates against the flat data
             decisions = self._build_decisions(content)
             if not decisions:
-                logger.debug("No decisions configured, skipping LLM call for cell %s", cell_id)
+                logger.debug(
+                    "No decisions configured, skipping LLM call for cell %s", cell_id
+                )
                 return
 
             request = DecisionRequest(
@@ -70,7 +81,8 @@ class DecisionPipeline:
             )
             logger.info(
                 "Querying LLM for cell %s with %d decisions",
-                cell_id, len(decisions),
+                cell_id,
+                len(decisions),
             )
             response = await self.llm_client.query(request)
 
@@ -83,8 +95,21 @@ class DecisionPipeline:
 
             logger.info(
                 "LLM decisions for cell %s: %s",
-                cell_id, json.dumps(llm_response, indent=2),
+                cell_id,
+                json.dumps(llm_response, indent=2),
             )
+
+            # Notify subscribers
+            if self.notification_service:
+                event_type = content.get("event_type", "decision")
+                await self.notification_service.notify(
+                    cell_id=cell_id,
+                    event_type=event_type,
+                    payload={
+                        "content": content,
+                        "decisions": llm_response,
+                    },
+                )
 
         except Exception:
             logger.exception("Decision pipeline error for cell %s", cell_id)
@@ -122,7 +147,9 @@ class DecisionPipeline:
 
         return decisions
 
-    def _extract_values(self, obj, collected: dict[str, set[str]] | None = None) -> dict[str, set[str]]:
+    def _extract_values(
+        self, obj, collected: dict[str, set[str]] | None = None
+    ) -> dict[str, set[str]]:
         """Recursively extract all key-value pairs from nested dicts/lists."""
         if collected is None:
             collected = {}
@@ -155,13 +182,16 @@ class DecisionPipeline:
         return results
 
 
-def setup_anomaly_pipeline(runtime: DecisionRuntime):
+def setup_anomaly_pipeline(
+    runtime: DecisionRuntime,
+    subscription_runtime: SubscriptionRuntime | None = None,
+):
     """Start the Kafka decision pipeline in a daemon thread."""
     from threading import Thread
 
     def _worker():
         try:
-            asyncio.run(_start_pipeline(runtime))
+            asyncio.run(_start_pipeline(runtime, subscription_runtime))
         except Exception as e:
             logger.error("Kafka decision pipeline crashed: %s", e)
 
@@ -170,7 +200,10 @@ def setup_anomaly_pipeline(runtime: DecisionRuntime):
     logger.info("Kafka decision pipeline thread started")
 
 
-async def _start_pipeline(runtime: DecisionRuntime):
+async def _start_pipeline(
+    runtime: DecisionRuntime,
+    subscription_runtime: SubscriptionRuntime | None = None,
+):
     from utils.kmw import PyKafBridge
 
     bridge = PyKafBridge(
@@ -180,7 +213,10 @@ async def _start_pipeline(runtime: DecisionRuntime):
     )
 
     llm_client = LLMClient()
-    pipeline = DecisionPipeline(bridge, llm_client, runtime)
+    notification_service = (
+        NotificationService(subscription_runtime) if subscription_runtime else None
+    )
+    pipeline = DecisionPipeline(bridge, llm_client, runtime, notification_service)
     bridge.bind_topic(settings.KAFKA_INPUT_TOPIC, pipeline.on_message)
     await bridge.start_consumer()
 
