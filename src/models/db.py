@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from sqlalchemy import Column
 from sqlalchemy.types import JSON
@@ -36,4 +37,14 @@ class DecisionResult(SQLModel, table=True):
     status: str = Field(default="pending")
     confidence: float | None = Field(default=None)
     details: dict | None = Field(default=None, sa_column=Column(JSON, nullable=True))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class Subscription(SQLModel, table=True):
+    __tablename__ = "subscriptions"
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    callback_url: str
+    cell_ids: list[int] = Field(sa_column=Column(JSON, nullable=False))
+    event_types: list[str] = Field(sa_column=Column(JSON, nullable=False))
+    expiry_time: datetime | None = Field(default=None)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
