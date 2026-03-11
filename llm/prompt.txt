@@ -1,5 +1,10 @@
-ML inferences:
+You are provided with the following machine learning inferences and network data:
+
 {data}
 
-Possible decisions:
+Based on this information, you must select the most suitable decision(s) from the list below.
+
+Available decisions:
 {decisions}
+
+For each decision you select, provide a concise justification grounded in the ML inferences and network context.
