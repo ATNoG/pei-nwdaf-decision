@@ -40,22 +40,26 @@ class NotificationService:
     async def notify(
         self,
         cell_id: int,
-        event_type: str,
+        event_types: set[str],
         payload: dict,
     ) -> int:
         """Send notification to all subscribers for this cell/event.
 
         Returns number of successful notifications.
         """
-        subscribers = self.subscription_runtime.get_by_cell_event(cell_id, event_type)
+        subscribers = set()
+        for event_type in event_types:
+            subscribers.update(
+                self.subscription_runtime.get_by_cell_event(cell_id, event_type)
+            )
 
         if not subscribers:
-            logger.debug("No subscribers for cell %s, event %s", cell_id, event_type)
+            logger.debug("No subscribers for cell %s, event [%s]", cell_id, event_types)
             return 0
 
         notification = {
             "cell_id": cell_id,
-            "event_type": event_type,
+            "event_type": event_types,
             "data": payload,
         }
 
@@ -69,7 +73,7 @@ class NotificationService:
             success_count,
             len(subscribers),
             cell_id,
-            event_type,
+            event_types,
         )
 
         return success_count

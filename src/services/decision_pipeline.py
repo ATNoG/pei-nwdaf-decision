@@ -101,10 +101,14 @@ class DecisionPipeline:
 
             # Notify subscribers
             if self.notification_service:
-                event_type = content.get("event_type", "decision")
+                event_types = set()
+                for result in content.get("results", []):
+                    if x := result.get("event_type"):
+                        event_types.add(x)
+
                 await self.notification_service.notify(
                     cell_id=cell_id,
-                    event_type=event_type,
+                    event_types=event_types,
                     payload={
                         "content": content,
                         "decisions": llm_response,
