@@ -5,9 +5,16 @@ services:
     restart: unless-stopped
     ports:
       - "${DPORT:-8000}:${DPORT:-8000}"
-    env_file:
-      - .env
     environment:
+      - KAFKA_HOST=${KAFKA_HOST:-kafka}
+      - KAFKA_PORT=${KAFKA_PORT:-9092}
+      - KAFKA_INPUT_TOPIC=${KAFKA_INPUT_TOPIC:-network.ml.results}
+      - KAFKA_ENABLED=${KAFKA_ENABLED:-true}
+      - KAFKA_DEBOUNCE_SECONDS=${KAFKA_DEBOUNCE_SECONDS:-60}
+      - LLM_URL=${LLM_URL}
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_MODEL=${LLM_MODEL}
+      - BLACKLIST_ENABLED=${BLACKLIST_ENABLED:-true}
       - DB_PATH=/app/data/decision.db
       - DEBUG=false
     volumes:
@@ -20,4 +27,4 @@ volumes:
 
 networks:
   nwdaf-network:
-    external: true
+    name: nwdaf-network
