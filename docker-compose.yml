@@ -4,7 +4,7 @@ services:
     container_name: decision-service
     restart: unless-stopped
     ports:
-      - "${DPORT:-8000}:${DPORT:-8000}"
+      - "${DECISION_PORT:-8000}:${DECISION_PORT:-8000}"
     environment:
       - KAFKA_HOST=${KAFKA_HOST:-kafka}
       - KAFKA_PORT=${KAFKA_PORT:-9092}
@@ -17,7 +17,7 @@ services:
       - BLACKLIST_ENABLED=${BLACKLIST_ENABLED:-true}
       - DB_PATH=/app/data/decision.db
       - DEBUG=false
-      - DPORT=${DPORT:-8000}
+      - DPORT=${DECISION_PORT:-8000}
     volumes:
       - decision_data:/app/data
     networks:
