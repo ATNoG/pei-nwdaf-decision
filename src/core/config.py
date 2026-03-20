@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     KAFKA_HOST: str = "kafka"
     KAFKA_PORT: str = "9092"
     KAFKA_INPUT_TOPIC: str = "network.ml.results"
+    KAFKA_OUTPUT_TOPIC: str = "network.decisions"
     KAFKA_ENABLED: bool = True
     KAFKA_DEBOUNCE_SECONDS: int = 60
 

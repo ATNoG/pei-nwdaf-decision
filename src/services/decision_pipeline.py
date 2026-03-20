@@ -5,10 +5,15 @@ expands templates, and asks the LLM to pick actions.
 """
 
 import asyncio
+import base64
+import gzip
 import json
 import logging
 import re
 import time
+from datetime import datetime, timezone
+
+import httpx
 
 from src.core.config import settings
 from src.core.runtime import DecisionRuntime
@@ -36,6 +41,86 @@ class DecisionPipeline:
         self.runtime = runtime
         self.notification_service = notification_service
         self._last_run: dict[int, float] = {}
+
+    def _compress_data(self, data: dict) -> dict:
+        """Compress decision data for Kafka."""
+        json_str = json.dumps(data)
+        compressed = gzip.compress(json_str.encode("utf-8"))
+        encoded = base64.b64encode(compressed).decode("utf-8")
+        return {"compression": "gzip", "data": encoded}
+
+    async def _publish_decision(
+        self, cell_id: int, ml_result: dict, llm_response: dict, timestamp: str
+    ):
+        """Publish decision results to Kafka."""
+        if not settings.KAFKA_ENABLED:
+            return
+
+        # LLM response format: {"decisions": ["name1", "name2"], "reasoning": "...", "alternatives": [...]}
+        chosen_decisions = llm_response.get("decisions", [])
+
+        # Build decision data with risk levels from runtime
+        decisions_data = []
+        for decision_obj in chosen_decisions:
+            decision_id = (
+                decision_obj.get("id")
+                if isinstance(decision_obj, dict)
+                else decision_obj
+            )
+            args = (
+                decision_obj.get("args", {}) if isinstance(decision_obj, dict) else {}
+            )
+
+            decision_entry = next(
+                (d for d in self.runtime.decisions if d.name == decision_id), None
+            )
+
+            # Expand template if args provided
+            description = decision_entry.description if decision_entry else decision_id
+            if description and args:
+                for key, value in args.items():
+                    description = description.replace(f"<<{key}>>", str(value))
+
+            decisions_data.append(
+                {
+                    "id": decision_id,
+                    "name": decision_id,
+                    "description": description,
+                    "args": args,
+                    "risk_level_id": (
+                        decision_entry.risk_level_id if decision_entry else None
+                    ),
+                }
+            )
+
+        # Build decision message
+        decision_message = {
+            "timestamp": timestamp,
+            "cell_id": cell_id,
+            "decisions": decisions_data,
+            "reasoning": llm_response.get("reasoning"),
+            "alternatives": llm_response.get("alternatives", []),
+            "llm_model": settings.LLM_MODEL,
+            "llm_provider_url": settings.LLM_URL,
+            "ml_result": ml_result,
+        }
+
+        # Compress and publish
+        compressed = self._compress_data(decision_message)
+        message_json = json.dumps(compressed)
+
+        try:
+            success = self.bridge.produce(settings.KAFKA_OUTPUT_TOPIC, message_json)
+            if success:
+                logger.info(
+                    "Published decision to Kafka for cell %s: %s",
+                    cell_id,
+                    chosen_decisions,
+                )
+            else:
+                logger.error("Failed to publish decision to Kafka for cell %s", cell_id)
+        except Exception as e:
+            logger.exception("Error publishing decision to Kafka: %s", e)
 
     def on_message(self, data: dict) -> dict:
         """Kafka bind callback — schedules async processing."""
@@ -67,7 +152,7 @@ class DecisionPipeline:
         """Send raw ML results to LLM with expanded decisions."""
         try:
             # Build decisions, expanding templates against the flat data
-            decisions = self._build_decisions(content)
+            decisions = self._build_decisions()
             if not decisions:
                 logger.debug(
                     "No decisions configured, skipping LLM call for cell %s", cell_id
@@ -84,6 +169,7 @@ class DecisionPipeline:
                 cell_id,
                 len(decisions),
             )
+            decision_timestamp = datetime.now(timezone.utc).isoformat()
             response = await self.llm_client.query(request)
 
             llm_response = response.get("response", response)
@@ -97,6 +183,11 @@ class DecisionPipeline:
                 "LLM decisions for cell %s: %s",
                 cell_id,
                 json.dumps(llm_response, indent=2),
+            )
+
+            # Publish decisions to Kafka
+            await self._publish_decision(
+                cell_id, content, llm_response, decision_timestamp
             )
 
             # Notify subscribers
@@ -115,41 +206,28 @@ class DecisionPipeline:
                     },
                 )
 
+        except (httpx.TimeoutException, httpx.ConnectTimeout, httpx.ReadTimeout) as e:
+            logger.error(
+                "LLM timeout for cell %s: %s (check LLM service availability)",
+                cell_id,
+                type(e).__name__,
+            )
         except Exception:
             logger.exception("Decision pipeline error for cell %s", cell_id)
 
-    def _build_decisions(self, content: dict) -> list[str]:
-        """Build decisions list, expanding <<attribute>> templates.
+    def _build_decisions(self) -> list[str]:
+        """Build decisions list with templates (not expanded).
 
-        Collects all unique values for each placeholder from the entire
-        content tree (flattened from all results).
+        Templates like "ban <<ip_src>>" are sent as-is to the LLM.
+        The LLM prompt explains that <<param>> indicates a parameter
+        to be filled from the ML results.
         """
         self.runtime.reload_from_db()
-        blacklisted = self.runtime.blacklist_names()
 
-        # Flatten all values from content for template expansion
-        flat_values = self._extract_values(content)
+        all_decisions = {d.name for d in self.runtime.decisions}
+        blacklisted = set(self.runtime.blacklist_names())
 
-        decisions: list[str] = []
-        for d in self.runtime.decisions:
-            if d.name in blacklisted:
-                continue
-
-            placeholders = self._TEMPLATE_RE.findall(d.name)
-            if not placeholders:
-                decisions.append(d.name)
-                continue
-
-            value_sets: dict[str, set[str]] = {}
-            for ph in placeholders:
-                value_sets[ph] = flat_values.get(ph, set())
-
-            expanded = self._expand_template(d.name, placeholders, value_sets)
-            for e in expanded:
-                if e not in blacklisted:
-                    decisions.append(e)
-
-        return decisions
+        return list(all_decisions - blacklisted)
 
     def _extract_values(
         self, obj, collected: dict[str, set[str]] | None = None
