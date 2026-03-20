@@ -51,7 +51,9 @@ class LLMClient:
             headers["Authorization"] = f"Bearer {self._api_key}"
 
         async with httpx.AsyncClient() as client:
-            response = await client.post(self._url, json=payload, headers=headers)
+            response = await client.post(
+                self._url, json=payload, headers=headers, timeout=30
+            )
             response.raise_for_status()
 
         self._call_count += 1
@@ -76,15 +78,45 @@ class LLMClient:
             "system": self._system,
             "prompt": prompt,
             "stream": False,
-            "format": {
-                "type": "object",
-                "properties": {
-                    "decisions": {"type": "array", "items": {"type": "string"}},
-                    "reasoning": {"type": "string"},
-                    "alternatives": {"type": "array", "items": {"type": "string"}},
-                },
-                "required": ["decisions", "reasoning", "alternatives"],
+            "format": "json",
+            # Performance optimizations for faster inference
+            "options": {
+                "temperature": 0.3,  # Lower = more deterministic and faster
+                "top_k": 10,  # Limit sampling to top 10 tokens
+                "top_p": 0.9,  # Nucleus sampling
+                "num_predict": 512,  # Limit max tokens (our JSON is small)
+                "repeat_penalty": 1.1,  # Reduce repetition
             },
+            # Strict schema validation (slower but more reliable):
+            # "format": {
+            #     "type": "object",
+            #     "properties": {
+            #         "decisions": {
+            #             "type": "array",
+            #             "items": {
+            #                 "type": "object",
+            #                 "properties": {
+            #                     "id": {"type": "string"},
+            #                     "args": {"type": "object"},
+            #                 },
+            #                 "required": ["id", "args"],
+            #             },
+            #         },
+            #         "reasoning": {"type": "string"},
+            #         "alternatives": {
+            #             "type": "array",
+            #             "items": {
+            #                 "type": "object",
+            #                 "properties": {
+            #                     "id": {"type": "string"},
+            #                     "args": {"type": "object"},
+            #                 },
+            #                 "required": ["id", "args"],
+            #             },
+            #         },
+            #     },
+            #     "required": ["decisions", "reasoning", "alternatives"],
+            # },
         }
 
     def _mask_api_key(self) -> str:
