@@ -14,39 +14,36 @@ CRITICAL INSTRUCTIONS:
 1. EXACT ID MATCHING (NON-NEGOTIABLE):
    - Copy decision IDs EXACTLY as shown above, character-for-character
    - Do NOT modify, shorten, or remove any part of the ID
-   - If the ID contains <<parameter>>, keep it: use "ban <<ip_src>>" not "ban"
+   - If the ID contains <<parameter>>, keep it as-is (e.g. "ban <<ip_src>>")
 
 2. TEMPLATE PARAMETERS:
    - For decisions with <<param>> (e.g., "ban <<ip_src>>"):
-     * Use the EXACT ID including <<>>: "ban <<ip_src>>"
-     * Extract the actual value from the ML data
-     * Provide it in "args": {{"ip_src": "192.168.1.100"}}
-
-   - For decisions without parameters (e.g., "alert_operator"):
-     * Use the EXACT ID: "alert_operator"
-     * Provide empty args: {{}}
+     * Keep the EXACT ID: "ban <<ip_src>>"
+     * Extract the actual value from the ML data above — NEVER invent or guess values
+     * Each unique IP must appear at most ONCE in the decisions list
+   - For decisions without parameters:
+     * Provide empty args: {}
 
 3. REQUIRED OUTPUT FORMAT:
 {{
   "decisions": [
-    {{"id": "exact_decision_id_from_list", "args": {{}}}},
-    {{"id": "ban <<ip_src>>", "args": {{"ip_src": "actual_value"}}}}
+    {{"id": "decision_id_from_list", "args": {{}}}}
   ],
-  "reasoning": "Clear explanation citing specific ML metrics, anomaly scores, or predictions. Reference actual data points.",
+  "reasoning": "Explanation referencing specific data points from the input.",
   "alternatives": [
     {{"id": "other_decision_id", "args": {{}}}}
   ]
 }}
 
 4. REASONING REQUIREMENTS:
-   - Must reference specific data points (e.g., "IP 192.168.1.100 shows 15/20 anomalous windows")
-   - Explain WHY each decision was chosen based on ML confidence, severity, or trends
-   - Keep concise but informative (2-3 sentences)
+   - Reference only IPs and values that appear in the data above
+   - Explain WHY each decision was chosen
+   - Keep concise (2-3 sentences)
 
 5. SELECTION GUIDELINES:
-   - High anomaly scores (>0.8) or many anomalous windows → consider "ban <<ip_src>>" or "alert_operator"
+   - Many anomalous windows per IP → consider "ban <<ip_src>>"
+   - Moderate anomaly scores → "alert_operator"
    - Traffic forecast predicts congestion → "reduce_quality" or "increase_bandwidth"
-   - Critical thresholds breached → "alert_operator"
    - No significant issues → "do_nothing"
 
 Return ONLY the JSON object. Do not include any text before or after the JSON.
