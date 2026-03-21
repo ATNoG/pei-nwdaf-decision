@@ -7,8 +7,6 @@ import httpx
 from ..core.config import settings
 from ..schemas import DecisionRequest
 
-PROMPT_PATH: str = "llm/prompt.txt"
-SYSTEM_PATH: str = "llm/system.txt"
 
 logger = logging.getLogger("LLM_client")
 
@@ -30,16 +28,16 @@ class LLMClient:
         self._model: str = settings.LLM_MODEL
         require("LLM_MODEL", self._model)
 
-        with open(PROMPT_PATH) as f:
+        with open(settings.LLM_PROMPT_PATH) as f:
             self._prompt_template: str = f.read()
 
-        with open(SYSTEM_PATH) as f:
+        with open(settings.LLM_SYSTEM_PATH) as f:
             self._system: str = f.read()
 
         self._call_count: int = 0
 
         logger.info(
-            f"Created new LLMCLient\nURL:{self._url}\nSystem:{SYSTEM_PATH}\nPROMPT:{PROMPT_PATH}"
+            f"Created new LLMCLient\nURL:{self._url}\nModel:{self._model}\nSystem:{settings.LLM_SYSTEM_PATH}\nPROMPT:{settings.LLM_PROMPT_PATH}"
         )
 
     async def query(self, request: DecisionRequest) -> dict:
@@ -52,7 +50,7 @@ class LLMClient:
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                self._url, json=payload, headers=headers, timeout=30
+                self._url, json=payload, headers=headers, timeout=settings.LLM_TIMEOUT
             )
             response.raise_for_status()
 
@@ -81,11 +79,11 @@ class LLMClient:
             "format": "json",
             # Performance optimizations for faster inference
             "options": {
-                "temperature": 0.3,  # Lower = more deterministic and faster
-                "top_k": 10,  # Limit sampling to top 10 tokens
-                "top_p": 0.9,  # Nucleus sampling
-                "num_predict": 512,  # Limit max tokens (our JSON is small)
-                "repeat_penalty": 1.1,  # Reduce repetition
+                "temperature": settings.LLM_TEMPERATURE,
+                "top_k": settings.LLM_TOP_K,
+                "top_p": settings.LLM_TOP_P,
+                "num_predict": settings.LLM_NUM_PREDICT,
+                "repeat_penalty": settings.LLM_REPEAT_PENALTY,
             },
             # Strict schema validation (slower but more reliable):
             # "format": {
