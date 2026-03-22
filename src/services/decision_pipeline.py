@@ -9,6 +9,7 @@ import base64
 import gzip
 import json
 import logging
+import os
 import re
 import time
 from datetime import datetime, timezone
@@ -21,7 +22,6 @@ from src.core.subscriptions import SubscriptionRuntime
 from src.schemas.decision import DecisionRequest
 from src.services.llm_client import LLMClient
 from src.services.notification_service import NotificationService
-import os
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class DecisionPipeline:
         self.notification_service = notification_service
         self._last_run: dict[int, float] = {}
         self._decision_history: dict[int, list[dict]] = {}
-        self._HISTORY_SIZE = os.getenv("DECISION_HISTORY_SIZE", 20)
+        self._HISTORY_SIZE = int(os.getenv("DECISION_HISTORY_SIZE", 20))
 
     def _compress_data(self, data: dict) -> dict:
         """Compress decision data for Kafka."""
