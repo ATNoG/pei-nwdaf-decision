@@ -8,3 +8,4 @@ class DecisionRequest:
     domain: str
     data: list[dict]
     decisions: list[str]
+    previous_decisions: list[dict] = field(default_factory=list)

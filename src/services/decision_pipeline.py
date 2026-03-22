@@ -41,6 +41,8 @@ class DecisionPipeline:
         self.runtime = runtime
         self.notification_service = notification_service
         self._last_run: dict[int, float] = {}
+        self._decision_history: dict[int, list[dict]] = {}
+        self._HISTORY_SIZE = 5
 
     def _compress_data(self, data: dict) -> dict:
         """Compress decision data for Kafka."""
@@ -159,10 +161,12 @@ class DecisionPipeline:
                 )
                 return
 
+            history = self._decision_history.get(cell_id, [])
             request = DecisionRequest(
                 domain="ml_results",
                 data=[content],
                 decisions=decisions,
+                previous_decisions=history,
             )
             logger.info(
                 "Querying LLM for cell %s with %d decisions",
@@ -184,6 +188,13 @@ class DecisionPipeline:
                 cell_id,
                 json.dumps(llm_response, indent=2),
             )
+
+            # Store decision in history buffer
+            chosen = llm_response.get("decisions", []) if isinstance(llm_response, dict) else []
+            if chosen:
+                history = self._decision_history.setdefault(cell_id, [])
+                history.append({"timestamp": decision_timestamp, "decisions": chosen})
+                self._decision_history[cell_id] = history[-self._HISTORY_SIZE:]
 
             # Publish decisions to Kafka
             await self._publish_decision(

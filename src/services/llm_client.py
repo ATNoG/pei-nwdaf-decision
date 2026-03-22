@@ -66,9 +66,17 @@ class LLMClient:
             "data": request.data,
         }
 
+        history_str = ""
+        if request.previous_decisions:
+            history_str = "\n\nPREVIOUS DECISIONS FOR THIS CELL (oldest first):\n" + "\n".join(
+                f"- [{e['timestamp']}] {', '.join(d['id'] for d in e['decisions'])}"
+                for e in request.previous_decisions
+            )
+
         prompt = self._prompt_template.format(
             data=json.dumps(context, indent=2),
             decisions="\n".join(f"- {d}" for d in request.decisions),
+            previous_decisions=history_str,
         )
 
         return {
