@@ -21,6 +21,7 @@ from src.core.subscriptions import SubscriptionRuntime
 from src.schemas.decision import DecisionRequest
 from src.services.llm_client import LLMClient
 from src.services.notification_service import NotificationService
+import os
 
 logger = logging.getLogger(__name__)
 
