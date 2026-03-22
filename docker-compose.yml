@@ -23,6 +23,7 @@ services:
       - LLM_PROMPT_PATH=${LLM_PROMPT_PATH:-llm/prompt.txt}
       - LLM_SYSTEM_PATH=${LLM_SYSTEM_PATH:-llm/system.txt}
       - BLACKLIST_ENABLED=${BLACKLIST_ENABLED:-true}
+      - DECISION_HISTORY_SIZE=${DECISION_HISTORY_SIZE:-20}
       - DB_PATH=/app/data/decision.db
       - DEBUG=false
       - DPORT=${DECISION_PORT:-8000}
