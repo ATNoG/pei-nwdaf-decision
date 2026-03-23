@@ -54,10 +54,10 @@ class DecisionPipeline:
 
     async def _publish_decision(
         self, cell_id: int, ml_result: dict, llm_response: dict, timestamp: str
-    ):
-        """Publish decision results to Kafka."""
+    ) -> list[dict]:
+        """Publish decision results to Kafka. Returns decisions_data with risk levels."""
         if not settings.KAFKA_ENABLED:
-            return
+            return []
 
         # LLM response format: {"decisions": ["name1", "name2"], "reasoning": "...", "alternatives": [...]}
         chosen_decisions = llm_response.get("decisions", [])
@@ -124,6 +124,8 @@ class DecisionPipeline:
                 logger.error("Failed to publish decision to Kafka for cell %s", cell_id)
         except Exception as e:
             logger.exception("Error publishing decision to Kafka: %s", e)
+
+        return decisions_data
 
     def on_message(self, data: dict) -> dict:
         """Kafka bind callback — schedules async processing."""
@@ -202,7 +204,7 @@ class DecisionPipeline:
                 self._decision_history[cell_id] = history[-self._HISTORY_SIZE :]
 
             # Publish decisions to Kafka
-            await self._publish_decision(
+            decisions_data = await self._publish_decision(
                 cell_id, content, llm_response, decision_timestamp
             )
 
@@ -213,12 +215,17 @@ class DecisionPipeline:
                     if x := result.get("type"):
                         event_types.add(x)
 
+                llm = llm_response if isinstance(llm_response, dict) else {}
                 await self.notification_service.notify(
                     cell_id=cell_id,
                     event_types=event_types,
                     payload={
                         "content": content,
-                        "decisions": llm_response,
+                        "decisions": {
+                            "decisions": decisions_data,
+                            "reasoning": llm.get("reasoning", ""),
+                            "alternatives": llm.get("alternatives", []),
+                        },
                     },
                 )
 
