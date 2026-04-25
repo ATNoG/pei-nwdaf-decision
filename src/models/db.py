@@ -44,7 +44,7 @@ class Subscription(SQLModel, table=True):
     __tablename__ = "subscriptions"
     id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
     callback_url: str
-    cell_ids: list[int] = Field(sa_column=Column(JSON, nullable=False))
+    tags_filter: dict = Field(sa_column=Column(JSON, nullable=False))
     event_types: list[str] = Field(sa_column=Column(JSON, nullable=False))
     expiry_time: datetime = Field(
         sa_column=Column(DateTime(timezone=False)),

@@ -47,11 +47,29 @@ class DecisionResultResponse(BaseModel):
     created_at: datetime
 
 
+class TagsFilter(BaseModel):
+    """Partial tag filter for NWDAF event subscriptions.
+
+    A subscription matches an incoming result if every non-None field here
+    equals the corresponding field in the result's tags.
+    At least one field must be set.
+    """
+
+    snssai_sst: str | None = None
+    snssai_sd: str | None = None
+    dnn: str | None = None
+    event: str | None = None
+
+    def to_match_dict(self) -> dict[str, str]:
+        """Return only the fields that were explicitly set (non-None)."""
+        return {k: v for k, v in self.model_dump().items() if v is not None}
+
+
 class SubscriptionEntry(BaseModel):
-    """Represents a subscription to cell events."""
+    """Represents a subscription to slice analytics events (NWDAF Nnwdaf_EventsSubscription)."""
 
     id: str | None = None
     callback_url: str
-    cell_ids: list[int]
+    tags_filter: TagsFilter
     event_types: list[str]
     created_at: datetime | None = None
