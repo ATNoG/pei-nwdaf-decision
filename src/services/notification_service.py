@@ -45,10 +45,10 @@ class NotificationService:
 
         Returns number of successful notifications.
         """
-        subscribers = [
+        subscribers = list({
             entry.callback_url
             for entry in self.subscription_runtime.get_matching(tags, event)
-        ]
+        })
 
         if not subscribers:
             logger.debug("No subscribers for tags %s, event %s", tags, event)

@@ -109,6 +109,8 @@ class SubscriptionRuntime:
         results = []
         for entry in self._subscriptions.values():
             filter_dict = entry.tags_filter.to_match_dict()
+            if not filter_dict:
+                continue
             if not all(tags.get(k) == v for k, v in filter_dict.items()):
                 continue
             if event and entry.event_types and event not in entry.event_types:

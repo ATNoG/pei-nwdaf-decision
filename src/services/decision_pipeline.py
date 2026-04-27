@@ -163,8 +163,7 @@ class DecisionPipeline:
             return data
         self._last_run[key] = now
 
-        loop = asyncio.get_event_loop()
-        loop.create_task(self._process(key, tags, content))
+        asyncio.get_running_loop().create_task(self._process(key, tags, content))
         return data
 
     async def _process(self, key: str, tags: dict, content: dict):
