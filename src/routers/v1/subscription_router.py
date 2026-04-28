@@ -3,6 +3,7 @@ import logging
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from src.core.disclaimer import get_disclaimer
 from src.core.subscriptions import SubscriptionRuntime
 from src.models import SubscriptionEntry
 
@@ -52,7 +53,7 @@ async def create_subscription(
         raise HTTPException(status_code=400, detail="event_types cannot be empty")
 
     subscription = runtime.add(entry)
-    return subscription.model_dump()
+    return {**subscription.model_dump(), "disclaimer": get_disclaimer()}
 
 
 @router.delete("/subscriptions/{subscription_id}", status_code=200)

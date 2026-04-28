@@ -6,6 +6,7 @@ from sqlmodel import Session, select
 
 from src.core.config import settings
 from src.core.database import engine, init_db
+from src.core.disclaimer import load_disclaimer
 from src.core.subscriptions import SubscriptionRuntime
 from src.models import (
     Blacklist,
@@ -150,6 +151,7 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.APP_NAME} runtime...")
 
     init_db()
+    load_disclaimer()
 
     with Session(engine) as session:
         # Initialize default risk levels if none exist
