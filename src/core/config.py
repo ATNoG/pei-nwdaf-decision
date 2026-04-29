@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "my-model"
     LLM_PROMPT_PATH: str = "llm/prompt.txt"
     LLM_SYSTEM_PATH: str = "llm/system.txt"
+    LLM_DISCLAIMER_PATH: str = "llm/disclaimer.txt"
     LLM_TEMPERATURE: float = 0.3
     LLM_TOP_K: int = 10
     LLM_TOP_P: float = 0.9
