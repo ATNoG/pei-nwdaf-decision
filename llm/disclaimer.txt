@@ -1,0 +1,10 @@
+Intended Purpose
+
+This system provides AI-assisted analytical support to qualified network personnel by generating non-binding recommendations based on observed network telemetry, analytics, and predictive models.
+
+The system is intended solely to support human assessment and decision-making regarding network conditions.
+
+The system does not autonomously execute operational actions, does not directly control network infrastructure, and does not replace human judgment.
+
+All operational decisions remain the responsibility of authorized human operators.
+
