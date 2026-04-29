@@ -26,6 +26,11 @@ from src.services.notification_service import NotificationService
 logger = logging.getLogger(__name__)
 
 
+def _tags_key(tags: dict) -> str:
+    """Stable string key from tags dict for debouncing and history."""
+    return ":".join(f"{k}={v}" for k, v in sorted(tags.items()) if v is not None)
+
+
 class DecisionPipeline:
 
     _TEMPLATE_RE = re.compile(r"<<(\w+)>>")
@@ -41,8 +46,8 @@ class DecisionPipeline:
         self.llm_client = llm_client
         self.runtime = runtime
         self.notification_service = notification_service
-        self._last_run: dict[int, float] = {}
-        self._decision_history: dict[int, list[dict]] = {}
+        self._last_run: dict[str, float] = {}
+        self._decision_history: dict[str, list[dict]] = {}
         self._HISTORY_SIZE = int(os.getenv("DECISION_HISTORY_SIZE", 20))
 
     def _compress_data(self, data: dict) -> dict:
@@ -52,17 +57,26 @@ class DecisionPipeline:
         encoded = base64.b64encode(compressed).decode("utf-8")
         return {"compression": "gzip", "data": encoded}
 
+    def _sanitize_for_llm(self, content: dict) -> dict:
+        """Strip routing tags from ML content; keep only event_type and analytics.
+
+        The LLM only needs to see what was measured, not which slice/DNN it came from.
+        """
+        sanitized = {k: v for k, v in content.items() if k != "tags"}
+        event_type = content.get("tags", {}).get("event")
+        if event_type:
+            sanitized["event_type"] = event_type
+        return sanitized
+
     async def _publish_decision(
-        self, cell_id: int, ml_result: dict, llm_response: dict, timestamp: str
+        self, tags: dict, ml_result: dict, llm_response: dict, timestamp: str
     ) -> list[dict]:
         """Publish decision results to Kafka. Returns decisions_data with risk levels."""
         if not settings.KAFKA_ENABLED:
             return []
 
-        # LLM response format: {"decisions": ["name1", "name2"], "reasoning": "...", "alternatives": [...]}
         chosen_decisions = llm_response.get("decisions", [])
 
-        # Build decision data with risk levels from runtime
         decisions_data = []
         for decision_obj in chosen_decisions:
             decision_id = (
@@ -78,7 +92,6 @@ class DecisionPipeline:
                 (d for d in self.runtime.decisions if d.name == decision_id), None
             )
 
-            # Expand template if args provided
             description = decision_entry.description if decision_entry else decision_id
             if description and args:
                 for key, value in args.items():
@@ -96,10 +109,9 @@ class DecisionPipeline:
                 }
             )
 
-        # Build decision message
         decision_message = {
             "timestamp": timestamp,
-            "cell_id": cell_id,
+            "tags": tags,
             "decisions": decisions_data,
             "reasoning": llm_response.get("reasoning"),
             "alternatives": llm_response.get("alternatives", []),
@@ -108,20 +120,16 @@ class DecisionPipeline:
             "ml_result": ml_result,
         }
 
-        # Compress and publish
         compressed = self._compress_data(decision_message)
         message_json = json.dumps(compressed)
 
+        key = _tags_key(tags)
         try:
             success = self.bridge.produce(settings.KAFKA_OUTPUT_TOPIC, message_json)
             if success:
-                logger.info(
-                    "Published decision to Kafka for cell %s: %s",
-                    cell_id,
-                    chosen_decisions,
-                )
+                logger.info("Published decision for %s: %s", key, chosen_decisions)
             else:
-                logger.error("Failed to publish decision to Kafka for cell %s", cell_id)
+                logger.error("Failed to publish decision for %s", key)
         except Exception as e:
             logger.exception("Error publishing decision to Kafka: %s", e)
 
@@ -135,47 +143,46 @@ class DecisionPipeline:
             logger.warning("Decision pipeline: bad message: %s", e)
             return data
 
-        cell_id = content.get("cell_id") or content.get("cell_index")
-        if cell_id is None:
+        tags = content.get("tags")
+        if not tags:
+            logger.debug("Decision pipeline: message missing 'tags', skipping")
             return data
-
-        cell_id = int(cell_id)
-        now = time.monotonic()
-        if now - self._last_run.get(cell_id, 0) < settings.KAFKA_DEBOUNCE_SECONDS:
-            return data
-        self._last_run[cell_id] = now
 
         results = content.get("results", [])
         if not results:
             return data
 
-        loop = asyncio.get_event_loop()
-        loop.create_task(self._process(cell_id, content))
+        if self.notification_service:
+            if not self.notification_service.subscription_runtime.get_matching(tags, tags.get("event")):
+                logger.debug("No subscribers for tags %s, skipping LLM", tags)
+                return data
+
+        key = _tags_key(tags)
+        now = time.monotonic()
+        if now - self._last_run.get(key, 0) < settings.KAFKA_DEBOUNCE_SECONDS:
+            return data
+        self._last_run[key] = now
+
+        asyncio.get_running_loop().create_task(self._process(key, tags, content))
         return data
 
-    async def _process(self, cell_id: int, content: dict):
-        """Send raw ML results to LLM with expanded decisions."""
+    async def _process(self, key: str, tags: dict, content: dict):
+        """Send sanitized ML results to LLM with expanded decisions."""
         try:
-            # Build decisions, expanding templates against the flat data
             decisions = self._build_decisions()
             if not decisions:
-                logger.debug(
-                    "No decisions configured, skipping LLM call for cell %s", cell_id
-                )
+                logger.debug("No decisions configured, skipping LLM call for %s", key)
                 return
 
-            history = self._decision_history.get(cell_id, [])
+            history = self._decision_history.get(key, [])
+            llm_data = self._sanitize_for_llm(content)
             request = DecisionRequest(
                 domain="ml_results",
-                data=[content],
+                data=[llm_data],
                 decisions=decisions,
                 previous_decisions=history,
             )
-            logger.info(
-                "Querying LLM for cell %s with %d decisions",
-                cell_id,
-                len(decisions),
-            )
+            logger.info("Querying LLM for %s with %d decisions", key, len(decisions))
             decision_timestamp = datetime.now(timezone.utc).isoformat()
             response = await self.llm_client.query(request)
 
@@ -186,41 +193,29 @@ class DecisionPipeline:
                 except (json.JSONDecodeError, TypeError):
                     pass
 
-            logger.info(
-                "LLM decisions for cell %s: %s",
-                cell_id,
-                json.dumps(llm_response, indent=2),
-            )
+            logger.info("LLM decisions for %s: %s", key, json.dumps(llm_response, indent=2))
 
-            # Store decision in history buffer
             chosen = (
                 llm_response.get("decisions", [])
                 if isinstance(llm_response, dict)
                 else []
             )
             if chosen:
-                history = self._decision_history.setdefault(cell_id, [])
+                history = self._decision_history.setdefault(key, [])
                 history.append({"timestamp": decision_timestamp, "decisions": chosen})
-                self._decision_history[cell_id] = history[-self._HISTORY_SIZE :]
+                self._decision_history[key] = history[-self._HISTORY_SIZE :]
 
-            # Publish decisions to Kafka
             decisions_data = await self._publish_decision(
-                cell_id, content, llm_response, decision_timestamp
+                tags, content, llm_response, decision_timestamp
             )
 
-            # Notify subscribers
             if self.notification_service:
-                event_types = set()
-                for result in content.get("results", []):
-                    if x := result.get("type"):
-                        event_types.add(x)
-
                 llm = llm_response if isinstance(llm_response, dict) else {}
                 await self.notification_service.notify(
-                    cell_id=cell_id,
-                    event_types=event_types,
+                    tags=tags,
+                    event=tags.get("event"),
                     payload={
-                        "content": content,
+                        "timestamp": decision_timestamp,
                         "decisions": {
                             "decisions": decisions_data,
                             "reasoning": llm.get("reasoning", ""),
@@ -230,20 +225,14 @@ class DecisionPipeline:
                 )
 
         except (httpx.TimeoutException, httpx.ConnectTimeout, httpx.ReadTimeout) as e:
-            logger.error(
-                "LLM timeout for cell %s: %s (check LLM service availability)",
-                cell_id,
-                type(e).__name__,
-            )
+            logger.error("LLM timeout for %s: %s (check LLM availability)", key, type(e).__name__)
         except Exception:
-            logger.exception("Decision pipeline error for cell %s", cell_id)
+            logger.exception("Decision pipeline error for %s", key)
 
     def _build_decisions(self) -> list[str]:
         """Build decisions list with templates (not expanded).
 
         Templates like "ban <<ip_src>>" are sent as-is to the LLM.
-        The LLM prompt explains that <<param>> indicates a parameter
-        to be filled from the ML results.
         """
         self.runtime.reload_from_db()
 
