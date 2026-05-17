@@ -27,6 +27,9 @@ services:
       - DB_PATH=/app/data/decision.db
       - DEBUG=false
       - DPORT=${DECISION_PORT:-8000}
+      - DEV_MODE=${DEV_MODE:-false}
+      - KEYCLOAK_URL=${KEYCLOAK_URL:-http://keycloak:8080/auth}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-aion}
     volumes:
       - decision_data:/app/data
     networks:
