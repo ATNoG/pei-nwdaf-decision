@@ -9,6 +9,7 @@ dependencies = [
     "sqlmodel==0.0.32",
     "pydantic-settings==2.7.1",
     "confluent-kafka==2.13.0",
+    "pygments>=2.20.0",
     "httpx==0.28.1",
     "PyJWT[crypto]>=2.8.0",
 ]
