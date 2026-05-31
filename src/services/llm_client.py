@@ -3,9 +3,24 @@ import logging
 from typing import Any
 
 import httpx
+from pydantic import BaseModel, ConfigDict
 
 from ..core.config import settings
 from ..schemas import DecisionRequest
+
+
+class _LLMDecisionItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    args: dict
+
+
+class _LLMResponseSchema(BaseModel):
+    """Strict response shape the LLM must produce."""
+    model_config = ConfigDict(extra="forbid")
+    decisions: list[_LLMDecisionItem]
+    reasoning: str
+    alternatives: list[_LLMDecisionItem]
 
 
 logger = logging.getLogger("LLM_client")
@@ -55,7 +70,29 @@ class LLMClient:
             response.raise_for_status()
 
         self._call_count += 1
-        return response.json()
+        raw = response.json()
+
+        logger.info("LLM raw response: %s", json.dumps(raw)[:2000])
+
+        # OpenAI chat-completions shape: choices[0].message.content holds the model output.
+        # Decision pipeline expects {"response": "..."} (Ollama generate shape), so we
+        # adapt OpenAI responses to that shape for backwards compatibility.
+        if "choices" in raw:
+            msg = raw["choices"][0]["message"]
+            content = msg.get("content") or ""
+            # Reasoning models (qwen3.6, deepseek-r1) sometimes put answer in
+            # reasoning_content when content is empty.
+            if not content.strip():
+                content = msg.get("reasoning_content") or ""
+            logger.info("LLM extracted content (len=%d): %s", len(content), content[:1000])
+            # Strip markdown code fences if present.
+            stripped = content.strip()
+            if stripped.startswith("```"):
+                stripped = stripped.split("\n", 1)[1] if "\n" in stripped else stripped[3:]
+                if stripped.rstrip().endswith("```"):
+                    stripped = stripped.rstrip()[:-3]
+            return {"response": stripped.strip()}
+        return raw
 
     def _prepare_request(self, request: DecisionRequest) -> dict:
         """prepares the request message"""
@@ -79,20 +116,22 @@ class LLMClient:
             previous_decisions=history_str,
         )
 
+        # OpenAI chat-completions format (skynet / OpenWebUI / Groq / OpenAI proper).
+        # Pydantic-generated json_schema forces the model to emit exactly this shape.
+        schema = _LLMResponseSchema.model_json_schema()
         return {
             "model": self._model,
-            "system": self._system,
-            "prompt": prompt,
+            "messages": [
+                {"role": "system", "content": self._system},
+                {"role": "user", "content": prompt},
+            ],
             "stream": False,
-            "format": "json",
-            # Performance optimizations for faster inference
-            "options": {
-                "temperature": settings.LLM_TEMPERATURE,
-                "top_k": settings.LLM_TOP_K,
-                "top_p": settings.LLM_TOP_P,
-                "num_predict": settings.LLM_NUM_PREDICT,
-                "repeat_penalty": settings.LLM_REPEAT_PENALTY,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {"name": "decision_response", "strict": True, "schema": schema},
             },
+            "temperature": settings.LLM_TEMPERATURE,
+            "top_p": settings.LLM_TOP_P,
             # Strict schema validation (slower but more reliable):
             # "format": {
             #     "type": "object",
