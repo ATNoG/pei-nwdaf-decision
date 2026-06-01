@@ -132,6 +132,7 @@ class LLMClient:
             },
             "temperature": settings.LLM_TEMPERATURE,
             "top_p": settings.LLM_TOP_P,
+            "max_tokens": settings.LLM_NUM_PREDICT,
             # Strict schema validation (slower but more reliable):
             # "format": {
             #     "type": "object",
