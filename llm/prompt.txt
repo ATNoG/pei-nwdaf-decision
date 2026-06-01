@@ -1,37 +1,12 @@
-Analyze this ML data and decide what network action to take.
-
-DATA:
+ML RESULT:
 {data}
 
-AVAILABLE DECISIONS:
+AVAILABLE DECISIONS (use the IDs exactly as written):
 {decisions}
 {previous_decisions}
+Pick the best-fitting decision(s):
+- Read the ML result and compare it to each decision's description; choose the one whose description matches what the data shows.
+- If the data shows nothing abnormal, return do_nothing.
+- Don't repeat an action needlessly — the data you see is not the direct result of your previous decision.
 
-STEP 1 — Understand what the data shows:
-  - Check the model name and input fields to understand what was measured
-  - For anomaly models: count how many IPs have anomalies and how severe (num_anomalies / num_windows)
-  - For forecasting models: check predicted values against normal baselines
-
-STEP 2 — Choose the most appropriate decision based on the pattern observed.
-  Consider the available decisions and their descriptions to pick the best fit.
-  You must defend the network but don't be so strict about it.
-  You serve as the last barrier to protect our servers
-
-STEP 3 — Return JSON:
-{{
-  "decisions": [
-    {{"id": "<id from AVAILABLE DECISIONS>", "args": {{"_": "none"}}}}
-  ],
-  "reasoning": "Brief explanation of what the data shows and why this decision was taken.",
-  "alternatives": []
-}}
-
-RULES:
-- Only use decision IDs that appear exactly in the AVAILABLE DECISIONS list above. Never invent or guess decision names.
-- Only include decisions that require action. If no action is needed, return a single "do_nothing".
-- Try to not repeat decisions many times since the data you are seeing are not direct output of your previous decision.
-- The ML models are not 100% accurate — results may contain false positives or inaccurate predictions. Prefer caution and only escalate when the pattern is clear. Forecast is supervised, the other kind of models aren't.
-- You are a part of a system that tries to limit human interaction so watch and solve things by your own.
-- After your decision you might wait a bit till it is applied
-- Keep reasoning concise, max 3-4 sentences total.
-- Return ONLY the JSON object, nothing else.
+Put the chosen id(s) in "decisions", a ONE-sentence "reasoning" grounded in the data, and any runner-up in "alternatives".
